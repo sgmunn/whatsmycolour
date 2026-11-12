@@ -11,9 +11,11 @@ A small native macOS color picker. Requires macOS 14 or newer.
 open "dist/What's My Colour.app"
 ```
 
-Click **Pick color** (⌘⇧P) to open the system magnifying eyedropper. Move over the desktop or any app, then click a pixel to select it. Press **⌘C** to copy its uppercase `#RRGGBB` value. Escape cancels picking and keeps the previous color. Hex values are converted to sRGB.
+Click **Start live** (⌘⇧P), then move the pointer over the desktop or any app. The main window stays on top and updates its swatch and hex value continuously. Keep this app active and press **⌘C** to copy the current uppercase `#RRGGBB` value. Press **⌘⇧P** again to freeze or resume the color. Hex values are converted to sRGB.
 
-The picker uses macOS's system color sampler. Cmd+C copies the selected color while this app is active; select the pixel before copying.
+Live sampling requires macOS **Screen Recording** permission. Enable What's My Colour in **System Settings → Privacy & Security → Screen Recording** (called **Screen & System Audio Recording** on some macOS versions). Relaunch the app if macOS requests it, then click Start live again. Screen pixels are processed locally and never saved or transmitted.
+
+Keyboard shortcuts work while What's My Colour is active. Moving the pointer over another app does not change keyboard focus; clicking that app does.
 
 ## Develop
 

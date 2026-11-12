@@ -18,5 +18,7 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-codesign --force --sign - "$app"
+# Keep the designated requirement stable so local rebuilds preserve TCC grants.
+codesign --force --sign - --identifier com.whatsmycolour.app \
+  --requirements '=designated => identifier "com.whatsmycolour.app"' "$app"
 echo "Built $app"

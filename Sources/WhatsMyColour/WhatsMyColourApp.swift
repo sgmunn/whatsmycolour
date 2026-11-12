@@ -6,26 +6,26 @@ final class ColorModel: ObservableObject {
     @Published var color = NSColor(srgbRed: 0.43, green: 0.35, blue: 0.96, alpha: 1)
     @Published var sampling = false
     @Published var copied = false
-    private var sampler: NSColorSampler?
+    private let sampler = LiveSampler()
+    @Published var error: String?
     private var resetTask: Task<Void, Never>?
 
     var hex: String { HexColor(color: color)?.string ?? "#000000" }
 
     func pick() {
-        guard !sampling else { return }
-        sampling = true
+        if sampling {
+            sampler.stop()
+            sampling = false
+            return
+        }
+        error = nil
         copied = false
-        let sampler = NSColorSampler()
-        self.sampler = sampler
-        sampler.show { [weak self] color in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if let color { self.color = color }
-                self.sampling = false
-                self.sampler = nil
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
-            }
+        sampling = true
+        sampler.start { [weak self] color in
+            self?.color = color
+        } failure: { [weak self] message in
+            self?.sampling = false
+            self?.error = message
         }
     }
 
@@ -61,15 +61,14 @@ struct PickerView: View {
             VStack(spacing: 8) {
                 Text(model.hex).font(.system(size: 38, weight: .medium, design: .monospaced))
                     .textSelection(.enabled)
-                Text(model.copied ? "Copied to clipboard" : "Click a color anywhere, then copy its hex.")
+                Text(model.copied ? "Copied to clipboard" : (model.sampling ? "Move your pointer anywhere to inspect its color." : "Start live sampling to inspect your screen."))
                     .font(.callout).foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
                 Button(action: model.pick) {
-                    Label("Pick color", systemImage: "eyedropper").frame(maxWidth: .infinity)
+                    Label(model.sampling ? "Freeze color" : "Start live", systemImage: model.sampling ? "pause.fill" : "eyedropper").frame(maxWidth: .infinity)
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                .disabled(model.sampling)
                 Button(action: model.copy) {
                     Label(model.copied ? "Copied" : "Copy hex", systemImage: model.copied ? "checkmark" : "doc.on.doc")
                         .frame(maxWidth: .infinity)
@@ -78,10 +77,17 @@ struct PickerView: View {
                 .tint(.accentColor)
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
-            Text("⌘⇧P to pick · ⌘C to copy · Esc to cancel picking")
+            if let error = model.error {
+                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+            }
+            Text("⌘⇧P to start / freeze · ⌘C to copy")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(28).frame(width: 380)
+        .onAppear {
+            NSApp.windows.first(where: { $0.canBecomeMain })?.level = .floating
+        }
+        .onDisappear { if model.sampling { model.pick() } }
     }
 }
 
