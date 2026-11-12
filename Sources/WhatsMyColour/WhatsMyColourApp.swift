@@ -8,14 +8,28 @@ final class ColorModel: ObservableObject {
     @Published var copied = false
     private let sampler = LiveSampler()
     @Published var error: String?
+    private var escapeMonitor: Any?
     private var resetTask: Task<Void, Never>?
+
+    init() {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return event }
+            let cancelled = MainActor.assumeIsolated {
+                if self?.sampling == true {
+                    self?.stopSampling()
+                    return true
+                }
+                return false
+            }
+            return cancelled ? nil : event
+        }
+    }
 
     var hex: String { HexColor(color: color)?.string ?? "#000000" }
 
     func pick() {
         if sampling {
-            sampler.stop()
-            sampling = false
+            stopSampling()
             return
         }
         error = nil
@@ -27,6 +41,11 @@ final class ColorModel: ObservableObject {
             self?.sampling = false
             self?.error = message
         }
+    }
+
+    func stopSampling() {
+        sampler.stop()
+        sampling = false
     }
 
     func copy() {
@@ -80,14 +99,14 @@ struct PickerView: View {
             if let error = model.error {
                 Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
             }
-            Text("⌘⇧P to start / freeze · ⌘C to copy")
+            Text("⌘⇧P to start / freeze · Esc to cancel · ⌘C to copy")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(28).frame(width: 380)
         .onAppear {
             NSApp.windows.first(where: { $0.canBecomeMain })?.level = .floating
         }
-        .onDisappear { if model.sampling { model.pick() } }
+        .onDisappear(perform: model.stopSampling)
     }
 }
 
@@ -111,6 +130,11 @@ struct WhatsMyColourApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
         .commands {
+            CommandMenu("Color") {
+                Button("Cancel Sampling", action: model.stopSampling)
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .disabled(!model.sampling)
+            }
             CommandGroup(replacing: .pasteboard) {
                 Button("Copy Hex", action: model.copy).keyboardShortcut("c")
             }
