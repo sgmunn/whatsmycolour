@@ -31,14 +31,18 @@ final class LiveSampler {
         task = Task { [overlay] in
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                let excluded = content.windows.filter { overlay.windowIDs.contains($0.windowID) }
+                // Exclude our application by default, then explicitly include the main
+                // window. This also excludes overlay windows absent from the snapshot.
+                let ownApplications = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
+                let mainWindowIDs = Set(NSApp.windows.filter { $0.canBecomeMain }.map { CGWindowID($0.windowNumber) })
+                let includedWindows = content.windows.filter { mainWindowIDs.contains($0.windowID) }
                 while !Task.isCancelled {
                     let mouse = NSEvent.mouseLocation
                     overlay.move(mouse: mouse)
                     if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
                        let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
                        let display = content.displays.first(where: { $0.displayID == id.uint32Value }) {
-                        let filter = SCContentFilter(display: display, excludingWindows: excluded)
+                        let filter = SCContentFilter(display: display, excludingApplications: ownApplications, exceptingWindows: includedWindows)
                         let config = SCStreamConfiguration()
                         let pixel = SamplingPoint.region(mouse: mouse, screen: screen.frame)
                         let region = MagnifierGeometry.captureRegion(pixel: pixel, screenSize: screen.frame.size)
